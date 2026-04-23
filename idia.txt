@@ -1,0 +1,129 @@
+# 📊 BTC 5m Polymarket — Multi-Dimensional Heatmap (Win Rate Model)
+
+---
+
+## 🧠 Core Idea
+
+We build a **3D state map** that answers:
+
+> **“If I enter RIGHT NOW, given current conditions, what is my probability of winning?”**
+
+---
+
+## 📐 Dimensions (State Definition)
+
+Each moment inside the 5-minute round is defined by:
+
+### 1. ⏱ Time Left (X-axis)
+
+* Measured every **20 seconds**
+* Values:
+
+```
+300, 280, 260, 240, 220, 200, 180, 160,
+140, 120, 100, 80, 60, 40, 20, 0
+```
+
+---
+
+### 2. 📈 PnL Z-Score Bucket (Y-axis)
+
+Z-score distance from round start price (or entry anchor).
+
+🧱 Better PnL Buckets (Z-score Based):
+
+```
+z < -2        → strong down (extreme)      → lt_neg_2
+-2 to -1      → medium down                → neg_2_to_neg_1
+-1 to -0.3    → weak down                  → neg_1_to_neg_0_3
+-0.3 to 0.3   → neutral                    → neg_0_3_to_0_3
+0.3 to 1      → weak up                    → pos_0_3_to_1
+1 to 2        → medium up                  → pos_1_to_2
+> 2           → strong up (extreme)        → gt_2
+```
+
+---
+
+### 3. 💥 Liquidation Pressure (Z-axis)
+
+Instead of raw size, use **net pressure**:
+
+```
+net_liq = bullish_liqs - bearish_liqs
+```
+
+Bucket it into:
+
+```
+strong_minus
+weak_minus
+neutral
+weak_plus
+strong_plus
+```
+
+---
+
+## 🧱 Final State
+
+Each observation becomes:
+
+```text
+state = (time_left_s, pnl_z_bucket, net_liq_bucket)
+```
+
+---
+
+## 📊 Training Dataset Schema
+
+| time_left_s | pnl_z_bucket   | net_liq_bucket | samples | wins | losses | win_rate | avg_final_pnl |
+| ----------- | -------------- | -------------- | ------: | ---: | -----: | -------: | ------------: |
+| 300         | neg_0_3_to_0_3 | strong_plus    |     142 |   91 |     51 |    64.1% |         0.31% |
+| 280         | pos_0_3_to_1   | weak_minus     |     188 |   84 |    104 |    44.7% |        -0.08% |
+| 260         | pos_1_to_2     | strong_plus    |      96 |   68 |     28 |    70.8% |         0.49% |
+
+---
+
+## 🧮 Labeling Logic (Training)
+
+For each historical 5m round, at every 20s checkpoint:
+
+1. Calculate `time_left_s`
+2. Calculate `pnl_z_score`, then map to `pnl_z_bucket`
+3. Calculate `net_liq_bucket`
+4. Simulate entering now
+5. After round end, assign `win` and `final_pnl_pct`
+
+---
+
+## 🎯 Runtime Goal
+
+At runtime, the bot does:
+
+```text
+current_state -> lookup -> win_rate
+```
+
+Then:
+- enter only if win_rate > threshold
+- size position based on confidence
+
+---
+
+## ⚡ Liquidation Event Retrain Update
+
+When a meaningful liquidation event is detected, retrain/refresh immediately before decision:
+
+```text
+liquidation_event_detected -> refresh rolling_200 -> aggregate -> current_state lookup -> decision
+```
+
+Recommended trigger controls:
+- absolute net liquidation threshold
+- net liquidation delta threshold vs previous tick
+- short cooldown to avoid burst retrains
+
+Safety remains unchanged:
+- still use only last 200 valid JSONL rows
+- still enforce low-sample confidence guardrails
+- still default to NO_TRADE when confidence is weak/unreliable

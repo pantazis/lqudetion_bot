@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "btc5m-heatmap-bot"
+version = "0.1.0"
+description = "BTC 5m heatmap decision bot with rolling-window dashboard"
+requires-python = ">=3.11"
+dependencies = [
+  "PyYAML>=6.0",
+  "requests>=2.31.0",
+  "websocket-client>=1.8.0",
+]
+
+[tool.setuptools]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]

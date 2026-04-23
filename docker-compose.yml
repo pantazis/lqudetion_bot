@@ -1,0 +1,15 @@
+version: "3.9"
+
+services:
+  btc5m_bot:
+    build: .
+    container_name: btc5m_heatmap_bot
+    env_file:
+      - .env
+    volumes:
+      - ./config.yaml:/app/config.yaml
+      - ./logs:/app/logs
+      - ./dashboard:/app/dashboard
+    command: ["python", "-m", "src.trading", "--config", "config.yaml", "--interval-seconds", "20"]
+    restart: unless-stopped
+
